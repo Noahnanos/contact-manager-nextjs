@@ -1,65 +1,259 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
+import { Contact, ContactFormData } from '@/types/contact'
+import { ContactCard } from '@/components/ContactCard'
+import { ContactForm } from '@/components/ContactForm'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { EmptyState, LoadingState } from '@/components/UIStates'
+// import { UserPlus, Search } from 'lucide-react'
 
 export default function Home() {
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  
+  // Form state
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  const [isFormLoading, setIsFormLoading] = useState(false)
+  
+  // Delete state
+  const [deleteContact, setDeleteContact] = useState<Contact | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Load contacts
+  useEffect(() => {
+    fetchContacts()
+  }, [])
+
+  const fetchContacts = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch('/api/contacts')
+      if (!response.ok) {
+        throw new Error('Failed to fetch contacts')
+      }
+      const data = await response.json()
+      setContacts(data)
+    } catch (error) {
+      console.error('Error fetching contacts:', error)
+      toast.error('Error al cargar los contactos')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleAddContact = () => {
+    setSelectedContact(null)
+    setIsFormOpen(true)
+  }
+
+  const handleEditContact = (contact: Contact) => {
+    setSelectedContact(contact)
+    setIsFormOpen(true)
+  }
+
+  const handleDeleteContact = (contact: Contact) => {
+    setDeleteContact(contact)
+  }
+
+  const handleSaveContact = async (contactData: ContactFormData) => {
+    try {
+      setIsFormLoading(true)
+      
+      if (selectedContact) {
+        // Update existing contact
+        const response = await fetch(`/api/contacts/${selectedContact.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(contactData),
+        })
+        
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to update contact')
+        }
+        
+        const updatedContact = await response.json()
+        setContacts(prev => 
+          prev.map(c => c.id === selectedContact.id ? updatedContact : c)
+        )
+        toast.success('Contacto actualizado exitosamente')
+      } else {
+        // Create new contact
+        const response = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(contactData),
+        })
+        
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create contact')
+        }
+        
+        const newContact = await response.json()
+        setContacts(prev => [newContact, ...prev])
+        toast.success('Contacto creado exitosamente')
+      }
+      
+      setIsFormOpen(false)
+      setSelectedContact(null)
+    } catch (error) {
+      console.error('Error saving contact:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Error al guardar el contacto'
+      toast.error(errorMessage)
+    } finally {
+      setIsFormLoading(false)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteContact) return
+    
+    try {
+      setIsDeleting(true)
+      
+      const response = await fetch(`/api/contacts/${deleteContact.id}`, {
+        method: 'DELETE',
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete contact')
+      }
+      
+      setContacts(prev => prev.filter(c => c.id !== deleteContact.id))
+      toast.success(`Contacto ${deleteContact.firstName} ${deleteContact.lastName} eliminado exitosamente`)
+      setDeleteContact(null)
+    } catch (error) {
+      console.error('Error deleting contact:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Error al eliminar el contacto'
+      toast.error(errorMessage)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // Filter contacts based on search term
+  const filteredContacts = contacts.filter(contact => {
+    const searchLower = searchTerm.toLowerCase()
+    return (
+      contact.firstName.toLowerCase().includes(searchLower) ||
+      contact.lastName.toLowerCase().includes(searchLower) ||
+      contact.email.toLowerCase().includes(searchLower) ||
+      (contact.phone && contact.phone.includes(searchTerm))
+    )
+  })
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Gestor de Contactos</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Gestiona tus contactos de manera eficiente
+              </p>
+            </div>
+            <button
+              onClick={handleAddContact}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <span className="mr-2">+</span>
+              Agregar Contacto
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="h-5 w-5 text-gray-400 flex items-center justify-center">🔍</span>
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar contactos por nombre, email o teléfono..."
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
         </div>
-      </main>
+
+        {/* Contacts Grid */}
+        {isLoading ? (
+          <LoadingState message="Cargando contactos..." />
+        ) : filteredContacts.length === 0 ? (
+          <EmptyState
+            title={searchTerm ? 'No se encontraron contactos' : 'Aún no hay contactos'}
+            description={
+              searchTerm 
+                ? 'Intenta ajustar los términos de búsqueda o limpia la búsqueda para ver todos los contactos.'
+                : 'Agrega tu primer contacto al sistema.'
+            }
+            actionLabel={searchTerm ? undefined : "Agregar Tu Primer Contacto"}
+            onAction={searchTerm ? undefined : handleAddContact}
+          />
+        ) : (
+          <>
+            <div className="mb-4 text-sm text-gray-600">
+              Mostrando {filteredContacts.length} de {contacts.length} contactos
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredContacts.map((contact) => (
+                <ContactCard
+                  key={contact.id}
+                  contact={contact}
+                  onEdit={handleEditContact}
+                  onDelete={handleDeleteContact}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Contact Form Modal */}
+      <ContactForm
+        contact={selectedContact}
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false)
+          setSelectedContact(null)
+        }}
+        onSave={handleSaveContact}
+        isLoading={isFormLoading}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteContact}
+        title="Eliminar Contacto"
+        message={
+          deleteContact 
+            ? `¿Estás seguro de que deseas eliminar a ${deleteContact.firstName} ${deleteContact.lastName}? Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteContact(null)}
+        isLoading={isDeleting}
+        variant="danger"
+      />
     </div>
-  );
+  )
 }

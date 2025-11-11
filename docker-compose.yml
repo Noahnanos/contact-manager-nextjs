@@ -1,0 +1,50 @@
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: contact_manager_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: contact_manager
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: app_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - contact_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contact_manager_app
+    restart: always
+    environment:
+      DATABASE_URL: "mysql://root:password@db:3306/contact_manager"
+      NEXTAUTH_SECRET: "your-contact-manager-secret-key-2024"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - contact_network
+
+
+volumes:
+  mysql_data:
+
+networks:
+  contact_network:
+    driver: bridge
