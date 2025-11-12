@@ -7,7 +7,6 @@ import { ContactCard } from '@/components/ContactCard'
 import { ContactForm } from '@/components/ContactForm'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState, LoadingState } from '@/components/UIStates'
-// import { UserPlus, Search } from 'lucide-react'
 
 export default function Home() {
   const [contacts, setContacts] = useState<Contact[]>([])
